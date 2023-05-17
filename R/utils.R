@@ -43,57 +43,26 @@ dbc_list_tables <- function(con, exclude_schemas) {
 #' @rdname dbc_list_tables
 #' @export
 dbc_list_tables.default <- function(con,
-                                    exclude_schemas = c("information_schema", "pg_catalog")) {
-  tables <- DBI::dbListTables(con)
+                            exclude_schemas = c("information_schema", "pg_catalog")) {
+  # tables <- DBI::dbListTables(con)
+  # 
+  # # Remove ones that match the regex
+  # exclude_regex <- paste0(exclude_schemas, "\\.", collapse = "|")
+  # tables <- tables[!grepl(exclude_regex, tables)]
+  # return(tables)
   
-  # Remove ones that match the regex
-  exclude_regex <- paste0(exclude_schemas, "\\.", collapse = "|")
-  tables <- tables[!grepl(exclude_regex, tables)]
-  return(tables)
-}
-
-#' @rdname dbc_list_tables
-#' @export
-dbc_list_tables.PqConnection <- function(con, exclude_schemas = c("information_schema", "pg_catalog")) {
-  # Base Query, currently meant for postgres and mysql only
-  query <- "SELECT CONCAT(table_schema, '.', table_name) AS table_name_raw, table_schema
-            FROM information_schema.tables"
+  query <- "SELECT 
+	table_schema,
+	table_name,
+	CONCAT(table_schema, '.', table_name) AS table_name_raw
+FROM information_schema.tables
+ORDER BY table_name_raw"
   
   tables <- DBI::dbGetQuery(con, query) %>%
     dplyr::filter(!table_schema %in% exclude_schemas) %>%
-    dplyr::select(table_name_raw) %>%
-    dplyr::pull()
+    #dplyr::filter(table_schema %in% include_schemas) %>%
+    #dplyr::select(table_schema, table_name, table_name_raw) %>%
+    dplyr::as_tibble() 
   
   return(tables)
-}
-
-#' @rdname dbc_list_tables
-#' @export
-dbc_list_tables.Snowflake <- function(con,
-                                      exclude_schemas = c("INFORMATION_SCHEMA")) {
-  tables <- DBI::dbGetQuery(con, "SHOW TERSE TABLES") %>%
-    dplyr::select(database_name, schema_name, name)
-  
-  views <- DBI::dbGetQuery(con, "SHOW TERSE VIEWS") %>%
-    dplyr::select(database_name, schema_name, name)
-  
-  dplyr::bind_rows(tables, views) %>%
-    dplyr::filter(!schema_name %in% exclude_schemas) %>%
-    with(paste(database_name, schema_name, name, sep = "."))
-}
-
-#' @rdname dbc_list_tables
-#' @export
-dbc_list_tables.SnowflakeDBConnection <- function(con,
-                                                  exclude_schemas = c("INFORMATION_SCHEMA")) {
-  # The dplyr.snowflakedb package
-  dbc_list_tables.Snowflake(con, exclude_schemas)
-}
-
-
-#' @rdname dbc_list_tables
-#' @export
-dbc_list_tables.duckdb_connection <- function(con,
-                                              exclude_schemas = c("INFORMATION_SCHEMA")) {
-  dplyr::pull(DBI::dbGetQuery(con, "SELECT table_schema || '.' || table_name AS table_name FROM information_schema.tables"), "table_name")
 }

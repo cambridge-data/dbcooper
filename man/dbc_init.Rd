@@ -3,7 +3,6 @@
 \name{dbc_init}
 \alias{dbc_init}
 \alias{dbc_init.default}
-\alias{dbc_init.src_sql}
 \title{Create functions for accessing a remote database}
 \usage{
 dbc_init(con, con_id, env = parent.frame(), ...)
@@ -18,8 +17,6 @@ dbc_init(con, con_id, env = parent.frame(), ...)
   table_post = identity,
   ...
 )
-
-\method{dbc_init}{src_sql}(con, con_id, env = parent.frame(), ...)
 }
 \arguments{
 \item{con}{A DBI-compliant database connection object, or a

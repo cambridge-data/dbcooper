@@ -18,7 +18,9 @@ assign_table_function <- function(table_name,
                                   table_formatter = snakecase::to_snake_case,
                                   table_post = identity) {
   # Create the function
-  fun <- function() table_post(dbc_table(table_name, con_id))
+  fun <- function() table_post(dbc_table(table_name, con_id)) %>%
+    janitor::clean_names()
+  
   attr(fun, 'connection') <- con_id
   attr(fun, 'table') <- table_name
 
@@ -95,7 +97,7 @@ dbc_init <- function(con, con_id, env = parent.frame(), ...) {
 #' @rdname dbc_init
 #' @export
 dbc_init.default <- function(con,
-                             con_id,
+                             con_id, 
                              env = parent.frame(),
                              tables = NULL,
                              table_prefix = NULL,
@@ -105,37 +107,32 @@ dbc_init.default <- function(con,
   # Assign the connection/pool globally so it can be accessed later
   dbc_add_connection(con, con_id)
 
+  # TODO: Make sure the list function only works on the schemas provided in table_prefix
   # Create functions for querying and getting a single table
-  list_fun <- function(query) { dbc_list_tables(dbc_get_connection(con_id)) }
+  list_fun <- function(query) { 
+    dbc_list_tables(dbc_get_connection(con_id))
+    }
   assign(paste0(con_id, "_list"), list_fun, pos = env)
 
-  query_fun <- function(query) { table_post(dbc_query(query, con_id)) }
-  assign(paste0(con_id, "_query"), query_fun, pos = env)
-
-  tbl_fun <- function(table_name = NULL) { table_post(dbc_table(paste0(table_prefix, table_name), con_id)) }
+  # This wont work if there's more than one table_prefix. Need to fix
+  tbl_fun <- function(table_name = NULL) { 
+    table_post(dbc_table(paste0(table_prefix, "." ,table_name), con_id)) 
+    
+  }
   assign(paste0(con_id, "_tbl"), tbl_fun, pos = env)
 
-  exec_fun <- function(query) { dbc_execute(query, con_id) }
-  assign(paste0(con_id, "_execute"), exec_fun, pos = env)
-
-  src_fun <- function() { dbplyr::src_dbi(dbc_get_connection(con_id)) }
-  assign(paste0(con_id, "_src"), src_fun, pos = env)
-
   # Create functions for each individual table
-  if (is.null(tables)) {
-    tables <- dbc_list_tables(con)
-  }
+  tables <- dbc_list_tables(con) %>%
+              dplyr::filter(table_schema %in% table_prefix) %>%
+              dplyr::filter(table_name %in% tables) %>%
+              dplyr::pull(table_name_raw)
+  
 
+  # maps over the table vector if entered. What if you want across difference schema?
   invisible(purrr::map(tables,
                        assign_table_function,
                        con_id,
                        env = env,
                        table_formatter = table_formatter,
                        table_post = table_post))
-}
-
-#' @rdname dbc_init
-#' @export
-dbc_init.src_sql <- function(con, con_id, env = parent.frame(), ...) {
-  dbc_init(con$con, con_id, env = parent.frame(), ...)
 }
